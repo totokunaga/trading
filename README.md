@@ -98,3 +98,9 @@ trading/
   scripts/
     fetch_time_series.py   # Main script
 ```
+
+## Notes
+
+- Consider market open times
+- Adding predictions based on fundamental analysis from banks would be helpful
+- Adding scenario-based entry/exit strategies for bearish and bullish positions based on technical analysis
