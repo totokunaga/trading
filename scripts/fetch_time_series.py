@@ -152,19 +152,18 @@ def write_csv(values: list[dict], output_path: str) -> None:
 def build_output_path(symbol: str, interval: str, values: list[dict]) -> str:
     """Build the output CSV path from the symbol, interval, and data range.
 
-    Creates a directory structure organised by symbol and interval, then
-    names the file after the time range of the data::
+    Creates a symbol directory and names the file after the interval and
+    time range of the data::
 
-        USDJPY/15min/202605121515_202605141400.csv
+        USDJPY/15min_202605121515_202605141400.csv
 
     Specifically:
       1. The symbol directory strips non-alphanumeric characters
          (e.g. "USD/JPY" -> "USDJPY").
-      2. The interval becomes a subdirectory (e.g. "15min").
-      3. Directories are created automatically if they don't exist.
-      4. The filename is ``{start}_{end}.csv`` where each timestamp is
-         the ``datetime`` field of the first / last element formatted as
-         ``YYYYMMDDHHmm``.
+      2. The directory is created automatically if it doesn't exist.
+      3. The filename is ``{interval}_{start}_{end}.csv`` where each
+         timestamp is the ``datetime`` field of the first / last element
+         formatted as ``YYYYMMDDHHmm``.
 
     Args:
         symbol:   Trading pair or ticker, e.g. "USD/JPY".
@@ -175,17 +174,17 @@ def build_output_path(symbol: str, interval: str, values: list[dict]) -> str:
 
     Returns:
         The full relative path to the CSV file, e.g.
-        ``USDJPY/15min/202605121515_202605141400.csv``.
+        ``USDJPY/15min_202605121515_202605141400.csv``.
     """
     symbol_dir = "".join(ch for ch in symbol if ch.isalnum())
-    dir_path = os.path.join(symbol_dir, interval)
-    os.makedirs(dir_path, exist_ok=True)
+    os.makedirs(symbol_dir, exist_ok=True)
 
-    start_dt = datetime.strptime(values[0]["datetime"], "%Y-%m-%d %H:%M:%S")
-    end_dt = datetime.strptime(values[-1]["datetime"], "%Y-%m-%d %H:%M:%S")
-    filename = f"{start_dt.strftime('%Y%m%d%H%M')}_{end_dt.strftime('%Y%m%d%H%M')}.csv"
+    dt_fmt = "%Y-%m-%d %H:%M:%S" if " " in values[0]["datetime"] else "%Y-%m-%d"
+    start_dt = datetime.strptime(values[0]["datetime"], dt_fmt)
+    end_dt = datetime.strptime(values[-1]["datetime"], dt_fmt)
+    filename = f"{interval}_{start_dt.strftime('%Y%m%d%H%M')}_{end_dt.strftime('%Y%m%d%H%M')}.csv"
 
-    return os.path.join(dir_path, filename)
+    return os.path.join(symbol_dir, filename)
 
 
 def main() -> None:
@@ -199,8 +198,8 @@ def main() -> None:
          env var (Docker, CI secrets, ``export``) works equally well.
       3. Call the Twelve Data API to retrieve candlestick data.
       4. Determine the output path — either the explicit ``--output`` value,
-         or an auto-generated path under ``<SYMBOL>/<interval>/`` named
-         after the time range of the fetched data.
+         or an auto-generated path under ``<SYMBOL>/`` named after the
+         interval and time range of the fetched data.
       5. Write the result to a CSV file and print a summary to stdout.
     """
     args = parse_args()
