@@ -149,25 +149,43 @@ def write_csv(values: list[dict], output_path: str) -> None:
         writer.writerows(values)
 
 
-def default_output_path(symbol: str, interval: str) -> str:
-    """Generate a unique, filesystem-safe CSV filename.
+def build_output_path(symbol: str, interval: str, values: list[dict]) -> str:
+    """Build the output CSV path from the symbol, interval, and data range.
 
-    Constructs a name like ``USD_JPY_15min_20260514_103000.csv`` by:
-      1. Replacing ``/`` in the symbol with ``_`` (e.g. "USD/JPY" -> "USD_JPY")
-         so the path doesn't accidentally create subdirectories.
-      2. Appending the interval and a second-precision timestamp so that
-         repeated runs produce distinct files rather than overwriting.
+    Creates a directory structure organised by symbol and interval, then
+    names the file after the time range of the data::
+
+        USDJPY/15min/202605121515_202605141400.csv
+
+    Specifically:
+      1. The symbol directory strips non-alphanumeric characters
+         (e.g. "USD/JPY" -> "USDJPY").
+      2. The interval becomes a subdirectory (e.g. "15min").
+      3. Directories are created automatically if they don't exist.
+      4. The filename is ``{start}_{end}.csv`` where each timestamp is
+         the ``datetime`` field of the first / last element formatted as
+         ``YYYYMMDDHHmm``.
 
     Args:
         symbol:   Trading pair or ticker, e.g. "USD/JPY".
         interval: Candlestick interval string, e.g. "15min".
+        values:   The OHLCV rows returned by ``fetch_time_series()`` (must
+                  be in ascending order so that the first element is the
+                  earliest and the last is the latest).
 
     Returns:
-        A filename string (no directory component) safe for all major OSes.
+        The full relative path to the CSV file, e.g.
+        ``USDJPY/15min/202605121515_202605141400.csv``.
     """
-    safe_symbol = symbol.replace("/", "_")
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{safe_symbol}_{interval}_{timestamp}.csv"
+    symbol_dir = "".join(ch for ch in symbol if ch.isalnum())
+    dir_path = os.path.join(symbol_dir, interval)
+    os.makedirs(dir_path, exist_ok=True)
+
+    start_dt = datetime.strptime(values[0]["datetime"], "%Y-%m-%d %H:%M:%S")
+    end_dt = datetime.strptime(values[-1]["datetime"], "%Y-%m-%d %H:%M:%S")
+    filename = f"{start_dt.strftime('%Y%m%d%H%M')}_{end_dt.strftime('%Y%m%d%H%M')}.csv"
+
+    return os.path.join(dir_path, filename)
 
 
 def main() -> None:
@@ -180,7 +198,10 @@ def main() -> None:
          the ``.env`` file at runtime, but any mechanism that sets the
          env var (Docker, CI secrets, ``export``) works equally well.
       3. Call the Twelve Data API to retrieve candlestick data.
-      4. Write the result to a CSV file and print a summary to stdout.
+      4. Determine the output path — either the explicit ``--output`` value,
+         or an auto-generated path under ``<SYMBOL>/<interval>/`` named
+         after the time range of the fetched data.
+      5. Write the result to a CSV file and print a summary to stdout.
     """
     args = parse_args()
 
@@ -193,10 +214,10 @@ def main() -> None:
         )
         sys.exit(1)
 
-    output_path = args.output or default_output_path(args.symbol, args.interval)
-
     print(f"Fetching {args.size} candlesticks for {args.symbol} @ {args.interval} ...")
     values = fetch_time_series(api_key, args.symbol, args.interval, args.size)
+
+    output_path = args.output or build_output_path(args.symbol, args.interval, values)
 
     write_csv(values, output_path)
     print(f"Wrote {len(values)} rows to {output_path}")
