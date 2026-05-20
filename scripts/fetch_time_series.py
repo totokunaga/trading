@@ -107,6 +107,7 @@ def fetch_time_series(
         "interval": interval,
         "outputsize": outputsize,
         "order": "asc",
+        "timezone": "Asia/Tokyo",
         "apikey": api_key,
     }
 
