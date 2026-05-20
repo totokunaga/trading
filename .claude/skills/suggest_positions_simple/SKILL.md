@@ -2,7 +2,15 @@
 
 ## Goal
 
-Analyze OHLCV candlestick data in a user-specified directory and suggest whether a trader should take a **long** or **short** position for the day. Provide conditional price-movement predictions across multiple timeframes grounded in technical analysis.
+Analyze OHLCV candlestick data in a user-specified directory and suggest whether a trader should take a long or short position for respective timeframes. Specifically, provide the following for each timeframe:
+
+- **Direction**: long or short
+- **Aimed Pattern**: bounce or breakout at which Support/Resistance level
+- **Entry Price**: the price at which the trader should enter the position
+  - More specifically, give what kind of candle pattern or price action formation would trigger the entry
+- **Stop Loss**: the price at which the trader should exit the position if it moves against them
+- **Take Profit**: the price at which the trader should exit the position if it moves in their favor
+- **Confidence**: confidence level in percentage (0-100%)
 
 ## Input
 
@@ -19,29 +27,9 @@ Ask the user to input a **directory name** (e.g., `USDJPY`). This directory is e
 
 ### 2. Technical Analysis
 
-Perform the following analyses on the data you read using **only** Dow Theory and Horizontal Support & Resistance. **Name every technique explicitly** in your output.
-
-#### Dow Theory — Trend Structure
-
-- **Identify the primary trend** by examining the sequence of swing highs and swing lows:
-  - **Uptrend**: Higher highs (HH) and higher lows (HL)
-  - **Downtrend**: Lower highs (LH) and lower lows (LL)
-- **Assess trend health**:
-  - *Intact* — price continues making HH + HL (or LH + LL)
-  - *Weakening* — a new swing fails to exceed the prior one (e.g., a lower high in an uptrend is the first warning)
-  - *Broken* — price violates the last significant swing low in an uptrend (or swing high in a downtrend)
-- **Identify the trend phase** (accumulation / public participation / excess for bull; distribution / panic / capitulation for bear).
-- **Volume confirmation** (if volume data is available) — volume should expand in the direction of the primary trend and contract on counter-trend moves. Rising price on falling volume is suspicious.
-
-#### Horizontal Support & Resistance — Key Levels
-
-- Identify key **support and resistance levels** from swing highs and lows across all available timeframes.
-- Prioritize levels with:
-  - **Multiple touches** — two or more rejections at the same price strengthen the level
-  - **Clean reversals** — sharp bounces carry more weight than slow grinding turns
-  - **Round numbers** — psychologically significant prices that attract orders
-- Check for **role reversal (polarity)** — a broken support level that may now act as resistance, or vice versa.
-- Look for **reaction candles** at key levels on the most recent candles (pin bar, engulfing, hammer, doji) that confirm the level is holding or breaking.
+Perform the following analyses on the data you read using mainly Dow Theory and Horizontal Support & Resistance.
+- Refer to @theories/dow.md for the details of Dow Theory analysis
+- Refer to @theories/horizontal_sr_level.md for the details of Support & Resistance analysis
 
 #### Multi-Timeframe Confluence
 
@@ -49,7 +37,7 @@ Perform the following analyses on the data you read using **only** Dow Theory an
 - A Dow-confirmed trend on a higher timeframe combined with an S/R bounce on a lower timeframe carries more weight than either signal alone.
 - Note where S/R levels align with Dow Theory swing points — these are the highest-conviction zones.
 
-### 3. Produce Predictions
+### 3. Produce Proposals & Reasonings
 
 For each of the following horizons, give a **conditional prediction**:
 
@@ -60,28 +48,38 @@ For each of the following horizons, give a **conditional prediction**:
 | **1 h** | Intra-session — weigh Dow Theory trend structure and key S/R zones |
 | **4 h** | Intra-day / swing — assess primary trend health and major S/R levels |
 
-Each prediction MUST follow this pattern:
+A proposal for each horizon should produce the followings as said in the goal section:
 
-> **{Horizon}:** If {specific condition, e.g., "the price breaks above the 147.20 resistance (tested 3 times)" or "the pullback holds above the 146.80 higher low"}, then {expected move, e.g., "expect a continued push toward 147.50 as the Dow Theory uptrend remains intact and the S/R role reversal at 147.20 provides new support"}.
-> Conversely, if {opposite condition}, then {opposite outcome}.
+- Direction
+- Aimed Pattern
+- Entry Price
+- Stop Loss
+- Take Profit
+- Confidence
 
-### 4. Final Recommendation
+Also, produce a summary of the proposal reasonings for each horizon. Such as:
 
-Summarize with a clear **Long** or **Short** bias (or **Neutral / Wait** if signals conflict), including:
+- What **technical patterns** (in a single timeframe or multi-timeframe) are observed and why they are significant to back up the proposal
+  - What indicators used to identify the patterns and how they were used
+  - What technical theories were applied and how they were applied
+- What potential psychological patterns or trends are observed and why they are significant to back up the proposal (if any)
 
-- **Bias**: Long / Short / Neutral
-- **Confidence**: Low / Medium / High (based on how many signals align)
-- **Key invalidation level**: The price at which this thesis breaks down
-- **Reasoning summary**: A 2–3 sentence paragraph tying together the most compelling signals
+## Generate Output
 
-## Output Format
-
-Create a new directory `preds/{input_dir_name}` if not exists, and save the analysis in a markdown file there.
+Create a new directory `preds/{input_dir_name}` if not exists, and save the analysis in a markdown file there. The filename should be `{YYYYMMDD_HH:MM}.md`.
 
 Structure the response as follows:
 
 ```
-## Market Analysis: {Symbol}
+## Analysis Overview {currency_pair} {YYYY-MM-DD HH:MM}
+
+| Timeframe | Direction | Pattern | Entry | Stop Loss | Take Profit | Confidence |
+|-----------|-----------|---------|-------|-----------|-------------|------------|
+| 15m | {long/short} | {bounce/breakout} | {entry price} | {stop loss} | {take profit} | {confidence} |
+| 1h | {long/short} | {bounce/breakout} | {entry price} | {stop loss} | {take profit} | {confidence} |
+| 4h | {long/short} | {bounce/breakout} | {entry price} | {stop loss} | {take profit} | {confidence} |
+| 1d | {long/short} | {bounce/breakout} | {entry price} | {stop loss} | {take profit} | {confidence} |
+
 ### Current Price Context
 (latest price, today's range, recent trend summary)
 
@@ -89,23 +87,33 @@ Structure the response as follows:
 (trend direction, HH/HL or LH/LL sequence, trend phase, and health per timeframe)
 
 ### Horizontal Support & Resistance — Key Levels
-(identified S/R levels with touch count, role reversals, and reaction candles)
+(In table representation, identified S/R levels with touch count, role reversals, and reaction candles)
 
-### Predictions
-#### 15-Minute Outlook
-(conditional prediction)
+## Proposal & Reasonings
 
-#### 30-Minute Outlook
-(conditional prediction)
+### 15-Minute
+**Direction**: {direction}, **Pattern**: {pattern}, **Confidence**: {confidence}
 
-#### 1-Hour Outlook
-(conditional prediction)
+| Field | Value |
+|-------|-------|
+| **Entry Price** | {entry price} |
+| **Stop Loss** | {stop loss} |
+| **Take Profit** | {take profit} |
+| **Trigger** | {candle pattern and/or price action formation} |
 
-#### 4-Hour Outlook
-(conditional prediction)
+**Reasoning**:
+{proposal reasoning generated in step 3}
 
-### Position Recommendation
-(bias, confidence, invalidation, reasoning)
+
+### 1-Hour
+{Follow the same structure as 15-Minute}
+
+### 4-Hour
+{Follow the same structure as 15-Minute}
+
+### 1-Day
+{Follow the same structure as 15-Minute}
+
 ```
 
 ## Important Notes
