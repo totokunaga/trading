@@ -1,0 +1,21 @@
+//@version=6
+indicator("ATR Ratio", overlay=false)
+
+atrLookback = input.int(14, "ATR Lookback", minval=1)
+threshold = input.float(3.0, "Threshold", minval=0.0)
+
+atrValue = ta.atr(atrLookback)
+barRange = high - low
+ratio = atrValue > 0 ? barRange / atrValue : 0.0
+
+isBullish = close > open
+aboveThreshold = ratio >= threshold
+
+color barColor = na
+if isBullish
+    barColor := aboveThreshold ? color.green : color.new(color.green, 60)
+else
+    barColor := aboveThreshold ? color.red : color.new(color.red, 60)
+
+plot(ratio, "ATR Ratio", style=plot.style_histogram, color=barColor, linewidth=4)
+hline(threshold, "Threshold", color=color.gray, linestyle=hline.style_dashed)
