@@ -47,9 +47,6 @@ else if pctB <= 0.0
         if atrRatio >= atrThreshold
             score += 1
 
-plotValue = score
-displayValue = plotValue == 0 ? 0.3 : plotValue
-
 color barColor = na
 if score == 0
     barColor := color.new(color.gray, 60)
@@ -66,7 +63,7 @@ else
         3 => color.new(color.blue, 25)
         => color.blue
 
-plot(displayValue, "Spike Score", style=plot.style_histogram, color=barColor, linewidth=4)
+plot(score, "Spike Score", style=plot.style_histogram, color=barColor, linewidth=4)
 hline(0, "Zero", color=color.gray, linestyle=hline.style_solid)
 hline(4, "", color=color.new(color.gray, 100))
 
