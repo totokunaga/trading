@@ -1,0 +1,57 @@
+//@version=6
+indicator("Spike Mean Reversion v1", overlay=false)
+
+zLength = input.int(20, "Z-Score Lookback")
+atrLength = input.int(14, "ATR Ratio Lookback")
+volLength = input.int(60, "Volume Ratio Lookback")
+zThreshold = input.float(2.25, "Z-Score Threshold")
+atrThreshold = input.float(3.0, "ATR Ratio Threshold")
+volThreshold = input.float(1.75, "Volume Ratio Threshold")
+
+logReturn = math.log(close / close[1])
+retMean = ta.sma(logReturn, zLength)
+retStdev = ta.stdev(logReturn, zLength)
+zScore = retStdev > 0 ? (logReturn - retMean) / retStdev : 0.0
+
+atrValue = ta.atr(atrLength)
+barRange = high - low
+atrRatio = atrValue > 0 ? barRange / atrValue : 0.0
+
+avgVolume = ta.sma(volume, volLength)
+volRatio = avgVolume > 0 ? volume / avgVolume : 0.0
+
+zPass = math.abs(zScore) >= zThreshold
+atrPass = atrRatio >= atrThreshold
+volPass = volRatio >= volThreshold
+
+score = 0
+if zPass
+    score += 1
+if atrPass
+    score += 1
+if zPass and atrPass and volPass
+    score += 1
+
+isUp = zScore >= 0
+
+color barColor = na
+if score == 0
+    barColor := na
+else if isUp
+    barColor := switch score
+        1 => color.new(color.red, 70)
+        2 => color.new(color.red, 35)
+        => color.red
+else
+    barColor := switch score
+        1 => color.new(color.blue, 70)
+        2 => color.new(color.blue, 35)
+        => color.blue
+
+plot(score, "Spike Score", style=plot.style_histogram, color=barColor, linewidth=4)
+hline(0, "Zero", color=color.gray, linestyle=hline.style_solid)
+hline(3, "", color=color.new(color.gray, 100))
+
+alertcondition(score >= 2 and isUp, "Bullish Spike (2+)", "Positive z-score spike score >= 2")
+alertcondition(score >= 2 and not isUp, "Bearish Spike (2+)", "Negative z-score spike score >= 2")
+alertcondition(score >= 2, "Any Spike (2+)", "Spike score >= 2")
