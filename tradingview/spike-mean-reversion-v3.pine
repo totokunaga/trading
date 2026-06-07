@@ -1,116 +1,126 @@
 //@version=6
-indicator("Spike Mean Reversion v3", overlay=false)
+indicator("Spike Mean Reversion v5", overlay=false)
 
-// ── Band/RSI score inputs (from original) ──
-bbLength = input.int(20, "BB Lookback", group="Band Score")
-bbMult = input.float(2.25, "BB Sigma", group="Band Score")
-rsiLength = input.int(14, "RSI Lookback", group="Band Score")
-bandVolLength = input.int(14, "Volume Ratio Lookback", group="Band Score")
-bandAtrLength = input.int(14, "ATR Ratio Lookback", group="Band Score")
-bandVolThreshold = input.float(1.75, "Volume Ratio Threshold", group="Band Score")
-bandAtrThreshold = input.float(3.0, "ATR Ratio Threshold", group="Band Score")
+// Two independent spike detectors, each normalized to a 0–1 strength:
+//   • Stretch — price closed far from its mean (Bollinger band + RSI). Good for
+//     slow grinds into overbought/oversold.
+//   • Impulse — a single bar moved violently (robust return z-score). Good for
+//     sudden flash moves / news candles.
+// Final strength = the stronger of the two (math.max), same as v4.
 
-// ── Robust z-score inputs (from v2) ──
-zLength = input.int(20, "Z-Score Lookback", group="Robust Z Score")
-zRangeLength = input.int(14, "Range Ratio Lookback", group="Robust Z Score")
-zRangeGap = input.int(3, "Range Ratio Gap (bars excluded)", group="Robust Z Score")
-zVolLength = input.int(60, "Volume Ratio Lookback", group="Robust Z Score")
-zThreshold = input.float(2.25, "Z-Score Threshold", group="Robust Z Score")
-zRangeThreshold = input.float(3.0, "Range Ratio Threshold", group="Robust Z Score")
-zVolThreshold = input.float(1.75, "Volume Ratio Threshold", group="Robust Z Score")
+// ── Stretch detector: price far from the mean ──
+stretchBandLength = input.int(20, "Bollinger Lookback", group="Stretch (price far from mean)")
+stretchBandSigma = input.float(2.25, "Bollinger Sigma", group="Stretch (price far from mean)")
+stretchRsiLength = input.int(14, "RSI Lookback", group="Stretch (price far from mean)")
+stretchVolumeLength = input.int(14, "Volume Avg Lookback", group="Stretch (price far from mean)")
+stretchRangeLength = input.int(14, "ATR Lookback", group="Stretch (price far from mean)")
+stretchVolumeThreshold = input.float(1.75, "Volume Ratio Threshold", group="Stretch (price far from mean)")
+stretchRangeThreshold = input.float(3.0, "Range/ATR Ratio Threshold", group="Stretch (price far from mean)")
 
-// ── Band/RSI score (gated, max 4) ──
-bbBasis = ta.sma(close, bbLength)
-bbDev = bbMult * ta.stdev(close, bbLength)
-bbUpper = bbBasis + bbDev
-bbLower = bbBasis - bbDev
-pctB = (close - bbLower) / (bbUpper - bbLower)
+// ── Impulse detector: violent single-bar move ──
+impulseLength = input.int(20, "Return Z-Score Lookback", group="Impulse (single-bar shock)")
+impulseRangeLength = input.int(14, "Range Baseline Lookback", group="Impulse (single-bar shock)")
+impulseRangeGap = input.int(3, "Range Baseline Gap (bars excluded)", group="Impulse (single-bar shock)")
+impulseVolumeLength = input.int(60, "Volume Avg Lookback", group="Impulse (single-bar shock)")
+impulseZThreshold = input.float(2.25, "Return Z-Score Threshold", group="Impulse (single-bar shock)")
+impulseRangeThreshold = input.float(3.0, "Range Ratio Threshold", group="Impulse (single-bar shock)")
+impulseVolumeThreshold = input.float(1.75, "Volume Ratio Threshold", group="Impulse (single-bar shock)")
 
-rsi = ta.rsi(close, rsiLength)
+// ── Alert threshold (fraction of full strength, 0–1) ──
+alertLevel = input.float(0.75, "Alert Strength (0-1)", minval=0.0, maxval=1.0, group="Alerts")
 
-bandAvgVolume = ta.sma(volume, bandVolLength)
-bandVolRatio = bandAvgVolume > 0 ? volume / bandAvgVolume : 0.0
-
-bandAtrValue = ta.atr(bandAtrLength)
 barRange = high - low
-bandAtrRatio = bandAtrValue > 0 ? barRange / bandAtrValue : 0.0
 
-bandScore = 0
-isUpper = false
-isLower = false
+// ── Stretch score (gated, raw max 4) ──
+// Score climbs only as deeper confirmation appears: band touch → RSI extreme →
+// then volume and range surges can each add a point.
+bandBasis = ta.sma(close, stretchBandLength)
+bandDev = stretchBandSigma * ta.stdev(close, stretchBandLength)
+bandUpper = bandBasis + bandDev
+bandLower = bandBasis - bandDev
+pctB = (close - bandLower) / (bandUpper - bandLower)
+
+stretchRsi = ta.rsi(close, stretchRsiLength)
+
+stretchAvgVolume = ta.sma(volume, stretchVolumeLength)
+stretchVolumeRatio = stretchAvgVolume > 0 ? volume / stretchAvgVolume : 0.0
+
+stretchAtr = ta.atr(stretchRangeLength)
+stretchRangeRatio = stretchAtr > 0 ? barRange / stretchAtr : 0.0
+
+stretchScore = 0
+atUpperBand = false
+atLowerBand = false
 
 if pctB >= 1.0
-    isUpper := true
-    bandScore := 1
-    if rsi >= 70.0
-        bandScore := 2
-        if bandVolRatio >= bandVolThreshold
-            bandScore += 1
-        if bandAtrRatio >= bandAtrThreshold
-            bandScore += 1
+    atUpperBand := true
+    stretchScore := 1
+    if stretchRsi >= 70.0
+        stretchScore := 2
+        if stretchVolumeRatio >= stretchVolumeThreshold
+            stretchScore += 1
+        if stretchRangeRatio >= stretchRangeThreshold
+            stretchScore += 1
 else if pctB <= 0.0
-    isLower := true
-    bandScore := 1
-    if rsi <= 30.0
-        bandScore := 2
-        if bandVolRatio >= bandVolThreshold
-            bandScore += 1
-        if bandAtrRatio >= bandAtrThreshold
-            bandScore += 1
+    atLowerBand := true
+    stretchScore := 1
+    if stretchRsi <= 30.0
+        stretchScore := 2
+        if stretchVolumeRatio >= stretchVolumeThreshold
+            stretchScore += 1
+        if stretchRangeRatio >= stretchRangeThreshold
+            stretchScore += 1
 
-// ── Robust z-score (median/MAD, gapped range baseline, max 3) ──
+// ── Impulse score (median/MAD z-score, gapped range baseline, raw max 3) ──
+// Robust statistics so a recent spike in the window does not mask later ones.
 logReturn = math.log(close / close[1])
-retMedian = ta.median(logReturn, zLength)
-absDev = math.abs(logReturn - retMedian)
-mad = ta.median(absDev, zLength)
-zScore = mad > 0 ? (logReturn - retMedian) / (1.4826 * mad) : 0.0
+returnMedian = ta.median(logReturn, impulseLength)
+absDeviation = math.abs(logReturn - returnMedian)
+mad = ta.median(absDeviation, impulseLength)
+impulseZ = mad > 0 ? (logReturn - returnMedian) / (1.4826 * mad) : 0.0
 
+// Range baseline ends `impulseRangeGap` bars back so the current spike cluster
+// does not contaminate the denominator.
 trueRange = ta.tr(true)
-rangeBaseline = ta.sma(trueRange, zRangeLength)[zRangeGap]
-zRangeRatio = rangeBaseline > 0 ? barRange / rangeBaseline : 0.0
+impulseRangeBaseline = ta.sma(trueRange, impulseRangeLength)[impulseRangeGap]
+impulseRangeRatio = impulseRangeBaseline > 0 ? barRange / impulseRangeBaseline : 0.0
 
-zAvgVolume = ta.sma(volume, zVolLength)
-zVolRatio = zAvgVolume > 0 ? volume / zAvgVolume : 0.0
+impulseAvgVolume = ta.sma(volume, impulseVolumeLength)
+impulseVolumeRatio = impulseAvgVolume > 0 ? volume / impulseAvgVolume : 0.0
 
-zPass = math.abs(zScore) >= zThreshold
-zRangePass = zRangeRatio >= zRangeThreshold
-zVolPass = zVolRatio >= zVolThreshold
+impulseZPass = math.abs(impulseZ) >= impulseZThreshold
+impulseRangePass = impulseRangeRatio >= impulseRangeThreshold
+impulseVolumePass = impulseVolumeRatio >= impulseVolumeThreshold
 
-zScoreFinal = 0
-if zPass
-    zScoreFinal += 1
-if zRangePass
-    zScoreFinal += 1
-if zPass and zRangePass and zVolPass
-    zScoreFinal += 1
+impulseScore = 0
+if impulseZPass
+    impulseScore += 1
+if impulseRangePass
+    impulseScore += 1
+if impulseZPass and impulseRangePass and impulseVolumePass
+    impulseScore += 1
 
-// ── Combine: max of the two scores; color follows the winning score ──
-score = math.max(bandScore, zScoreFinal)
+// ── Combine: normalize each to its own max, take the stronger ──
+stretchStrength = stretchScore / 4.0
+impulseStrength = impulseScore / 3.0
+strength = math.max(stretchStrength, impulseStrength)
 
-zIsUp = zScore >= 0
-// On a tie, default to the robust-z direction.
-winnerIsUp = zScoreFinal >= bandScore ? zIsUp : isUpper
+impulseIsUp = impulseZ >= 0
+// On a tie, default to the impulse direction.
+winnerIsUp = impulseStrength >= stretchStrength ? impulseIsUp : atUpperBand
 
+// Color: 4 saturation tiers across the 0–1 strength range. Red = up, Blue = down.
 color barColor = na
-if score == 0
+if strength <= 0.0
     barColor := na
-else if winnerIsUp
-    barColor := switch score
-        1 => color.new(color.red, 70)
-        2 => color.new(color.red, 50)
-        3 => color.new(color.red, 25)
-        => color.red
 else
-    barColor := switch score
-        1 => color.new(color.blue, 70)
-        2 => color.new(color.blue, 50)
-        3 => color.new(color.blue, 25)
-        => color.blue
+    transp = strength >= 1.0 ? 0 : strength >= 0.75 ? 25 : strength >= 0.5 ? 50 : 70
+    barColor := winnerIsUp ? color.new(color.red, transp) : color.new(color.blue, transp)
 
-plot(score, "Spike Score", style=plot.style_histogram, color=barColor, linewidth=4)
+plot(strength, "Spike Strength", style=plot.style_histogram, color=barColor, linewidth=4)
 hline(0, "Zero", color=color.gray, linestyle=hline.style_solid)
-hline(4, "", color=color.new(color.gray, 100))
+hline(1, "Max", color=color.new(color.gray, 100))
 
-alertcondition(score >= 3 and winnerIsUp, "Bullish Spike (3+)", "Bullish spike score >= 3")
-alertcondition(score >= 3 and not winnerIsUp, "Bearish Spike (3+)", "Bearish spike score >= 3")
-alertcondition(score >= 3, "Any Spike (3+)", "Spike score >= 3")
+alertcondition(strength >= alertLevel and winnerIsUp, "Bullish Spike", "Bullish spike strength >= alert level")
+alertcondition(strength >= alertLevel and not winnerIsUp, "Bearish Spike", "Bearish spike strength >= alert level")
+alertcondition(strength >= alertLevel, "Any Spike", "Spike strength >= alert level")

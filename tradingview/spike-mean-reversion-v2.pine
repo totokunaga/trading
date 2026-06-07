@@ -31,34 +31,36 @@ zPass = math.abs(zScore) >= zThreshold
 atrPass = atrRatio >= atrThreshold
 volPass = volRatio >= volThreshold
 
-score = 0
+rawScore = 0
 if zPass
-    score += 1
+    rawScore += 1
 if atrPass
-    score += 1
+    rawScore += 1
 if zPass and atrPass and volPass
-    score += 1
+    rawScore += 1
+
+score = rawScore / 3.0
 
 isUp = zScore >= 0
 
 color barColor = na
-if score == 0
+if rawScore == 0
     barColor := na
 else if isUp
-    barColor := switch score
+    barColor := switch rawScore
         1 => color.new(color.red, 70)
         2 => color.new(color.red, 35)
         => color.red
 else
-    barColor := switch score
+    barColor := switch rawScore
         1 => color.new(color.blue, 70)
         2 => color.new(color.blue, 35)
         => color.blue
 
 plot(score, "Spike Score", style=plot.style_histogram, color=barColor, linewidth=4)
 hline(0, "Zero", color=color.gray, linestyle=hline.style_solid)
-hline(3, "", color=color.new(color.gray, 100))
+hline(1, "", color=color.new(color.gray, 100))
 
-alertcondition(score >= 2 and isUp, "Bullish Spike (2+)", "Positive z-score spike score >= 2")
-alertcondition(score >= 2 and not isUp, "Bearish Spike (2+)", "Negative z-score spike score >= 2")
-alertcondition(score >= 2, "Any Spike (2+)", "Spike score >= 2")
+alertcondition(score >= 2.0 / 3.0 and isUp, "Bullish Spike (2+)", "Positive z-score spike score >= 2/3")
+alertcondition(score >= 2.0 / 3.0 and not isUp, "Bearish Spike (2+)", "Negative z-score spike score >= 2/3")
+alertcondition(score >= 2.0 / 3.0, "Any Spike (2+)", "Spike score >= 2/3")
